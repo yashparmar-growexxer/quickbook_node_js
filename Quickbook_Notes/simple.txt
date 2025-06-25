@@ -1,0 +1,43 @@
+// Status: 200
+// Connection: keep-alive
+// Keep-Alive: timeout=5
+// Strict-Transport-Security: max-age=15552000
+// Cache-Control: no-cache, no-store
+// Content-Type: application/json;charset=utf-8
+// Server: nginx
+// {
+//  "refreshToken": "RT1-60-H0-1759498668xlvhjrczi24433klira8",
+//  "accessToken": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwieC5vcmciOiJIMCJ9..nvCXKlv6pwLFNDa1Dfo8NA
+//      .2B4QeqSkTcVtoorsCN9WV0MjtycXY97hXKUwIIsak7ud_Mm2ProOYDuN1Dj9nsciKdAPvSGuiso0MahrA-tIDg2OQUkM5ROB
+//      -YtYTpeUsgRZo4wNctuKzU7jmYluPKijhOf5RGfAmuGOkP0eINXA9XmHqdTaJz80_oZVNHAG-xW1GpgRRZvBsfFQgHYonShzmpQ5
+//      -knJNrTJX_aHRNrT6Y_LSP90fHxmuq6WnbWjMB1hEcgtegvj3ASEyX7LstAL3j473C2u-YErdTkU0oDu27ucEL1Z28l_uXDy6wEqmaIhE9wwKuRK4Oh1lHs
+//      -Mk_4hrQyNywOZb2SkjOV30cVbDQv7wwcWq9nu_hwHZrcvkfaqtP6
+//      -vMTApfVHfN7h1TLoL8xHUMAikzBWvyl3eESK0Jj9wMkZiy8l0fgMOq6Osb23LeSNKQoPHdpgxKEw
+//      -uOt38HTXtVooRwVqjQX87Yoles2mTILupe1noHrS6m5K4dGdmTeWx4Nu5KTKWunU_Pi7fgsQLfZdXI4xzArdA5yFrXJH1fW2WL6mkj6Z4hSmC2nOSSNt8v
+//      jEUKRZtRjytaoB5KOmKsXQ58NDLKJfNY7-gMaqoyjedO3ogmZoCEiRYNZ4F6jAfLdBCAIFnqdtwn.Ar49Pa_D4LDRj8IJsRYu2Q",
+//  "expires_in": 3600,
+//  "x_refresh_token_expires_in": 8726400,
+//  "idToken": "eyJraWQiOiJPUElDUFJEMDUxMDIwMjMiLCJhbGciOiJSUzI1NiJ9
+//      .eyJhdWQiOlsiQUJQVUZmTVN6ZTBFYkJoYUZZeGhxaHJVemJzWXhQdmNLeEZER3h5ZG5NakdWdjgyVWYiXSwic3ViIjoiYTQxNmM3OGYtZWE2NC0zODJhLT
+//      liZDEtNzI4MDFjN2Q0MTFlIiwicmVhbG1pZCI6IjkzNDE0NTQ4OTk0NTg5MjEiLCJhdXRoX3RpbWUiOjE3NTA3NzIyNTUsImlzcyI6Imh0dHBzOi8vb2F1d
+//      GgucGxhdGZvcm0uaW50dWl0LmNvbS9vcC92MSIsImV4cCI6MTc1MDc3NTg2OCwiaWF0IjoxNzUwNzcyMjY4fQ
+//      .HqYscfag9i5JeHkr6SfcUjSuWD9Jt242mA5YSO572snbRvRn68YK5WpsLASWsMTyw8EP0jHfesxsJwkn4nyGi-vD7
+//      -MgHhO3EKE8_iMEjvtwM3yark4TZ5UaJVEYwlbnust47jyK6WlOAl7UsaNjWQict0qcuCtS83IRy4ZTWOp3SZss8CQrL2hyOYQIrueiwqQtzPsgaL31l00p
+//      nJkwolej3y-FRR-zsjkVU_UEHEvZoB_O3vRfiAJC_5ixMss_1H6yNic6vQLLt7Wh0eNA64HjOFdKBExLoXduHDiPqwSmXXBvI9SdiUT2fi9sVycnWe2JmlV
+//      _WTnmNt8tMym_ww"
+// }
+
+
+// POST /oauth2/v1/tokens/bearer?grant_type=authorization_code&code
+//     =XAB117507728559zIhzOESjj18iImcE3Rm2kO2GNHwCnVpB61z&redirect_uri=https://developer.intuit.com/v2/OAuth2Playground
+//     /RedirectUrl
+// Content-Type: application/x-www-form-urlencoded
+// Accept: application/json
+// Authorization: Basic QUJQVUZmTVN6ZTBFYkJoYUZZeGhxaHJVemJzWXhQdmNLeEZER3h5ZG5NakdWdjgyVWY6OXIzZHJFT2dwVnpPOXNKa0MwWEVOc3JZd2xU
+//     MElDMklKbFZaUWFsSw==
+
+
+
+
+// Access token
+// Bearer eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwieC5vcmciOiJIMCJ9..nvCXKlv6pwLFNDa1Dfo8NA.2B4QeqSkTcVtoorsCN9WV0MjtycXY97hXKUwIIsak7ud_Mm2ProOYDuN1Dj9nsciKdAPvSGuiso0MahrA-tIDg2OQUkM5ROB-YtYTpeUsgRZo4wNctuKzU7jmYluPKijhOf5RGfAmuGOkP0eINXA9XmHqdTaJz80_oZVNHAG-xW1GpgRRZvBsfFQgHYonShzmpQ5-knJNrTJX_aHRNrT6Y_LSP90fHxmuq6WnbWjMB1hEcgtegvj3ASEyX7LstAL3j473C2u-YErdTkU0oDu27ucEL1Z28l_uXDy6wEqmaIhE9wwKuRK4Oh1lHs-Mk_4hrQyNywOZb2SkjOV30cVbDQv7wwcWq9nu_hwHZrcvkfaqtP6-vMTApfVHfN7h1TLoL8xHUMAikzBWvyl3eESK0Jj9wMkZiy8l0fgMOq6Osb23LeSNKQoPHdpgxKEw-uOt38HTXtVooRwVqjQX87Yoles2mTILupe1noHrS6m5K4dGdmTeWx4Nu5KTKWunU_Pi7fgsQLfZdXI4xzArdA5yFrXJH1fW2WL6mkj6Z4hSmC2nOSSNt8vjEUKRZtRjytaoB5KOmKsXQ58NDLKJfNY7-gMaqoyjedO3ogmZoCEiRYNZ4F6jAfLdBCAIFnqdtwn.Ar49Pa_D4LDRj8IJsRYu2Q

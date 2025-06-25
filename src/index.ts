@@ -2,6 +2,7 @@ import express, { Request, Response, Router } from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import cors from 'cors';
+import routes from './routes';
 
 dotenv.config();
 
@@ -10,6 +11,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use('/api', routes);
 
 // QuickBooks API Config
 const QB_BASE_URL = process.env.QB_ENVIRONMENT === 'sandbox' 

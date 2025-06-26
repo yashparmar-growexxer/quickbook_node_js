@@ -167,38 +167,108 @@ export class InvoiceController {
 
 
     static async getInvoicePDF(req: Request, res: Response): Promise<void> {
-    try {
-        const invoiceId = req.params.id;
-        
-        if (!invoiceId) {
-             res.status(400).json({ error: 'Invoice ID is required' });
+        try {
+            const invoiceId = req.params.id;
+
+            if (!invoiceId) {
+                res.status(400).json({ error: 'Invoice ID is required' });
+            }
+
+            const pdfData = await QuickBooksService.apiRequest(
+                'GET',
+                `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}/pdf`,
+                null,
+                'arraybuffer' // This is crucial for PDF responses
+            );
+
+            // Set PDF headers
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=invoice_${invoiceId}.pdf`);
+
+            // Send the PDF buffer
+            res.send(Buffer.from(pdfData));
+
+        } catch (error) {
+            console.error(`Failed to fetch PDF for invoice ${req.params.id}:`, error);
+
+            const errorResponse = {
+                message: 'Failed to generate PDF',
+                error: error instanceof Error ? error.message : 'Unknown error',
+                qboError: (error as any).response?.data
+            };
+
+            res.status(500).json(errorResponse);
         }
-
-        const pdfData = await QuickBooksService.apiRequest(
-            'GET',
-            `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}/pdf`,
-            null,
-            'arraybuffer' // This is crucial for PDF responses
-        );
-
-        // Set PDF headers
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=invoice_${invoiceId}.pdf`);
-        
-        // Send the PDF buffer
-        res.send(Buffer.from(pdfData));
-
-    } catch (error) {
-        console.error(`Failed to fetch PDF for invoice ${req.params.id}:`, error);
-        
-        const errorResponse = {
-            message: 'Failed to generate PDF',
-            error: error instanceof Error ? error.message : 'Unknown error',
-            qboError: (error as any).response?.data
-        };
-
-        res.status(500).json(errorResponse);
     }
-}
 
+    static async sendInvoice(req: Request, res: Response): Promise<void> {
+        try {
+            const { invoiceId, email } = req.body;
+
+            // 1. Validate Inputs
+            if (!invoiceId) {
+                res.status(400).json({
+                    error: 'invoiceId is required',
+                    exampleRequest: {
+                        invoiceId: "145",
+                        email: "customer@example.com" // optional
+                    }
+                });
+            }
+
+            // 2. Verify Invoice Exists
+            const invoice = await QuickBooksService.apiRequest(
+                'GET',
+                `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}?minorversion=75`
+            );
+
+            console.log(invoice, "invoiceDetail")
+
+            // 3. Prepare the Request
+            const endpoint = email
+                ? `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}/send?sendTo=${encodeURIComponent(email)}&minorversion=75`
+                : `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}/send?minorversion=75`;
+
+            console.log(endpoint, "endPoint")
+
+            // 4. Make the API Call
+            const result = await QuickBooksService.apiRequest(
+                'POST',
+                endpoint,
+                null, // No body needed
+                'json'
+            );
+
+            // 5. Return Success Response
+            res.json({
+                success: true,
+                invoiceId,
+                emailUsed: email || invoice.Invoice.BillEmail?.Address,
+                status: result.Invoice.EmailStatus,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            // Enhanced error diagnostics
+            const errorInfo = {
+                error: 'Failed to send invoice',
+                quickbooksErrorCode: error.response?.data?.Fault?.Error?.[0]?.code,
+                details: error.response?.data?.Fault?.Error?.[0]?.Message,
+                technicalDetails: error.response?.data?.Fault?.Error?.[0]?.Detail,
+                troubleshooting: [
+                    '1. Verify the invoice exists and is not voided',
+                    '2. Check email settings in QuickBooks (Gear Icon → Account Settings → Sales → Messages)',
+                    '3. Ensure your OAuth token has both "com.intuit.quickbooks.accounting" and "email" scopes'
+                ],
+                requestDebug: {
+                    invoiceId: req.body.invoiceId,
+                    emailAttempted: req.body.email,
+                    endpointUsed: error.config?.url,
+                    realmId: process.env.QB_REALM_ID
+                }
+            };
+
+            res.status(error.response?.status || 500).json(errorInfo);
+        }
+    }
 }

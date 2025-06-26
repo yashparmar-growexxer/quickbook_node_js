@@ -7,5 +7,6 @@ invoiceRouter.post('/create-invoice', InvoiceController.createInvoice);
 // invoiceRouter.get('/', InvoiceController.getInvoices);
 invoiceRouter.get('/', InvoiceController.getInvoicesDetailed);
 invoiceRouter.get('/:id/pdf', InvoiceController.getInvoicePDF);
+invoiceRouter.get('/send', InvoiceController.sendInvoice);
 
 export default invoiceRouter;

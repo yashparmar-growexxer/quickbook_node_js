@@ -124,44 +124,80 @@ export class InvoiceController {
     }
 
     static async getInvoicesDetailed(req: Request, res: Response): Promise<void> {
+        try {
+            const { customerId, startDate, endDate } = req.query;
+
+            // Build query with all needed fields
+            let query = `SELECT * FROM Invoice`;
+            const conditions = [];
+
+            if (customerId) conditions.push(`CustomerRef = '${customerId}'`);
+            if (startDate) conditions.push(`TxnDate >= '${startDate}'`);
+            if (endDate) conditions.push(`TxnDate <= '${endDate}'`);
+
+            if (conditions.length) query += ` WHERE ${conditions.join(' AND ')}`;
+            query += ` ORDERBY Metadata.LastUpdatedTime DESC MAXRESULTS 100`;
+
+            const result = await QuickBooksService.apiRequest(
+                'GET',
+                `/v3/company/${process.env.QB_REALM_ID}/query?query=${encodeURIComponent(query)}&minorversion=65`
+            );
+
+            // Return full invoice objects with all details
+            const invoices = result.QueryResponse.Invoice || [];
+
+            res.json({
+                count: invoices.length,
+                invoices: invoices.map((inv: { Balance: number; EmailStatus: string; }) => ({
+                    ...inv,
+                    // Add human-readable status if needed
+                    HumanStatus: inv.Balance === 0 ? 'PAID' :
+                        inv.EmailStatus === 'EmailSent' ? 'SENT' : 'DRAFT'
+                }))
+            });
+
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to fetch invoices',
+                details: error instanceof Error ? error.message : String(error),
+                qboError: (error as any).response?.data
+            });
+        }
+    }
+
+
+    static async getInvoicePDF(req: Request, res: Response): Promise<void> {
     try {
-        const { customerId, startDate, endDate } = req.query;
+        const invoiceId = req.params.id;
         
-        // Build query with all needed fields
-        let query = `SELECT * FROM Invoice`;
-        const conditions = [];
+        if (!invoiceId) {
+             res.status(400).json({ error: 'Invoice ID is required' });
+        }
 
-        if (customerId) conditions.push(`CustomerRef = '${customerId}'`);
-        if (startDate) conditions.push(`TxnDate >= '${startDate}'`);
-        if (endDate) conditions.push(`TxnDate <= '${endDate}'`);
-
-        if (conditions.length) query += ` WHERE ${conditions.join(' AND ')}`;
-        query += ` ORDERBY Metadata.LastUpdatedTime DESC MAXRESULTS 100`;
-
-        const result = await QuickBooksService.apiRequest(
+        const pdfData = await QuickBooksService.apiRequest(
             'GET',
-            `/v3/company/${process.env.QB_REALM_ID}/query?query=${encodeURIComponent(query)}&minorversion=65`
+            `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}/pdf`,
+            null,
+            'arraybuffer' // This is crucial for PDF responses
         );
 
-        // Return full invoice objects with all details
-        const invoices = result.QueryResponse.Invoice || [];
+        // Set PDF headers
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=invoice_${invoiceId}.pdf`);
         
-        res.json({
-            count: invoices.length,
-            invoices: invoices.map((inv: { Balance: number; EmailStatus: string; }) => ({
-                ...inv,
-                // Add human-readable status if needed
-                HumanStatus: inv.Balance === 0 ? 'PAID' : 
-                            inv.EmailStatus === 'EmailSent' ? 'SENT' : 'DRAFT'
-            }))
-        });
+        // Send the PDF buffer
+        res.send(Buffer.from(pdfData));
 
     } catch (error) {
-        res.status(500).json({ 
-            error: 'Failed to fetch invoices',
-            details: error instanceof Error ? error.message : String(error),
+        console.error(`Failed to fetch PDF for invoice ${req.params.id}:`, error);
+        
+        const errorResponse = {
+            message: 'Failed to generate PDF',
+            error: error instanceof Error ? error.message : 'Unknown error',
             qboError: (error as any).response?.data
-        });
+        };
+
+        res.status(500).json(errorResponse);
     }
 }
 

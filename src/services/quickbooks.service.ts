@@ -34,24 +34,36 @@ export class QuickBooksService {
     }
   }
 
-  static async apiRequest(method: string, endpoint: string, data?: any) {
-    const url = `${QB_BASE_URL}${endpoint}`;
-    const accessToken = await this.refreshToken();
+ static async apiRequest(
+  method: string,
+  endpoint: string,
+  data?: any,
+  responseType: 'json' | 'arraybuffer' = 'json'
+) {
+  const url = `${QB_BASE_URL}${endpoint}`;
+  const accessToken = await this.refreshToken();
 
-    try {
-      const response = await axios({
-        method,
-        url,
-        data,
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+  try {
+    const response = await axios({
+      method,
+      url,
+      data,
+      responseType, // Add this parameter
+      timeout: 30000, // 30 seconds timeout added here
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': responseType === 'arraybuffer' ? 'application/pdf' : 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('QuickBooks API Error:', {
+      url,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    throw error;
   }
+}
 }

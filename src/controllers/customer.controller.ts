@@ -58,32 +58,39 @@ export class CustomerController {
     }
   }
 
-  static async getMinimalCustomers(req: Request, res: Response) {
+ static async getMinimalCustomers(req: Request, res: Response) {
     try {
-      const query = `SELECT Id, DisplayName, PrimaryEmailAddr, PrimaryPhone, BillAddr
-        FROM Customer
+      // Corrected query with valid fields
+      const query = `SELECT Id, DisplayName, PrimaryEmailAddr, PrimaryPhone 
+        FROM Customer 
         WHERE Id >= '20' AND Id <= '30'
-        MAXRESULTS 100`;
+        MAXRESULTS 1000`;
       
-      const result = await QuickBooksService.apiRequest(
-        'GET',
-        `/v3/company/${process.env.QB_REALM_ID}/query?query=${encodeURIComponent(query)}`
-      );
+      const url = `/v3/company/${process.env.QB_REALM_ID}/query?query=${encodeURIComponent(query)}`;
+      
+      const result = await QuickBooksService.apiRequest('GET', url);
 
-      const customers = result.QueryResponse.Customer?.map((customer: { Id: any; DisplayName: any; PrimaryEmailAddr: { Address: any; }; PrimaryPhone: { FreeFormNumber: any; }; BillAddr: { Country: any; }; }) => ({
+      if (!result.QueryResponse) {
+        throw new Error('Unexpected response format from QuickBooks');
+      }
+
+      const customers = result.QueryResponse.Customer?.map((customer: any) => ({
         id: customer.Id,
         displayName: customer.DisplayName,
         email: customer.PrimaryEmailAddr?.Address,
-        phone: customer.PrimaryPhone?.FreeFormNumber,
-        country: customer.BillAddr?.Country
+        phone: customer.PrimaryPhone?.FreeFormNumber
+        // Removed country since BillAddr is not available
       })) || [];
 
       res.json(customers);
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      console.error('Error in getMinimalCustomers:', error);
+      res.status(500).json({ 
+        error: (error as Error).message,
+        details: (error as any).response?.data
+      });
     }
   }
-
   static async getCustomerById(req: Request, res: Response) {
     try {
       const result = await QuickBooksService.apiRequest(

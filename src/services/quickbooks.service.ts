@@ -35,46 +35,91 @@ export class QuickBooksService {
   }
 
   // In your QuickBooksService.apiRequest method:
-static async apiRequest(
-  method: string,
-  endpoint: string,
-  data?: any,
-  responseType: 'json' | 'arraybuffer' = 'json',
-  isUpdate: boolean = false
-): Promise<any> {
-  try {
-    const url = `${QB_BASE_URL}${endpoint}`;
-    const token = await this.refreshToken();
+  // static async apiRequest(
+  //   method: string,
+  //   endpoint: string,
+  //   data?: any,
+  //   responseType: 'json' | 'arraybuffer' = 'json',
+  //   isUpdate: boolean = false
+  // ): Promise<any> {
+  //   try {
+  //     const url = `${QB_BASE_URL}${endpoint}`;
+  //     const token = await this.refreshToken();
 
-    const config: AxiosRequestConfig = {
-      method,
-      url,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      responseType,
-      params: isUpdate ? { sparse: true } : {},
-      data: data ? JSON.stringify(data) : undefined,
-    };
+  //     const config: AxiosRequestConfig = {
+  //       method,
+  //       url,
+  //       headers: {
+  //         'Authorization': `Bearer ${token}`,
+  //         'Content-Type': 'application/json',
+  //         'Accept': 'application/json',
+  //       },
+  //       responseType,
+  //       params: isUpdate ? { sparse: true } : {},
+  //       data: data ? JSON.stringify(data) : undefined,
+  //     };
 
-    console.log('QuickBooks API Request:', {
-      method,
-      url,
-      params: config.params,
-      data: config.data,
-    });
+  //     console.log('QuickBooks API Request:', {
+  //       method,
+  //       url,
+  //       params: config.params,
+  //       data: config.data,
+  //     });
 
-    const response = await axios(config);
-    return response.data;
-  } catch (error) {
-    console.error('QuickBooks API Error:', {
-      status: error.response?.status,
-      data: error.response?.data,
-      config: error.config,
-    });
-    throw error;
+  //     const response = await axios(config);
+  //     return response.data;
+  //   } catch (error) {
+  //     console.error('QuickBooks API Error:', {
+  //       status: error.response?.status,
+  //       data: error.response?.data,
+  //       config: error.config,
+  //     });
+  //     throw error;
+  //   }
+  // }
+
+
+
+  static async apiRequest(
+    method: string,
+    endpoint: string,
+    data?: any,
+    responseType: 'json' | 'arraybuffer' = 'json',
+    customHeaders: Record<string, string> = {}
+  ): Promise<any> {
+    try {
+      const url = `${QB_BASE_URL}${endpoint}`;
+      const token = await this.refreshToken();
+
+      const config: AxiosRequestConfig = {
+        method,
+        url,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json', // Default, can be overridden
+          ...customHeaders // This allows overriding headers
+        },
+        responseType,
+        data: data ? JSON.stringify(data) : undefined,
+      };
+
+      console.log('QuickBooks API Request:', {
+        method,
+        url,
+        headers: config.headers,
+        responseType
+      });
+
+      const response = await axios(config);
+      return response.data;
+    } catch (error) {
+      console.error('QuickBooks API Error:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        config: error.config,
+      });
+      throw error;
+    }
   }
-}
 }

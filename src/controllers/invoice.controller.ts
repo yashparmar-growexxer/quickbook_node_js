@@ -4,7 +4,7 @@ import { QuickBooksService } from "../services/quickbooks.service";
 export class InvoiceController {
 
 
-      // Helper method to calculate due date (synchronous)
+    // Helper method to calculate due date (synchronous)
     private static calculateDueDate(days: number): string {
         const date = new Date();
         date.setDate(date.getDate() + days);
@@ -44,8 +44,8 @@ export class InvoiceController {
                         lineItem.SalesItemLineDetail.Qty = item.SalesItemLineDetail.Qty ?? 1;
 
                         // Calculate UnitPrice if not provided
-                        lineItem.SalesItemLineDetail.UnitPrice = 
-                            item.SalesItemLineDetail.UnitPrice ?? 
+                        lineItem.SalesItemLineDetail.UnitPrice =
+                            item.SalesItemLineDetail.UnitPrice ??
                             item.Amount / lineItem.SalesItemLineDetail.Qty;
                     }
 
@@ -201,40 +201,58 @@ export class InvoiceController {
     }
 
 
-    static async getInvoicePDF(req: Request, res: Response): Promise<void> {
-        try {
-            const invoiceId = req.params.id;
-
-            if (!invoiceId) {
-                res.status(400).json({ error: 'Invoice ID is required' });
-            }
-
-            const pdfData = await QuickBooksService.apiRequest(
-                'GET',
-                `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}/pdf`,
-                null,
-                'arraybuffer' // This is crucial for PDF responses
-            );
-
-            // Set PDF headers
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=invoice_${invoiceId}.pdf`);
-
-            // Send the PDF buffer
-            res.send(Buffer.from(pdfData));
-
-        } catch (error) {
-            console.error(`Failed to fetch PDF for invoice ${req.params.id}:`, error);
-
-            const errorResponse = {
-                message: 'Failed to generate PDF',
-                error: error instanceof Error ? error.message : 'Unknown error',
-                qboError: (error as any).response?.data
-            };
-
-            res.status(500).json(errorResponse);
+   static async getInvoicePDF(req: Request, res: Response): Promise<void> {
+    try {
+        const invoiceId = req.params.id;
+        if (!invoiceId) {
+            res.status(400).json({ error: 'Invoice ID is required' });
+            return;
         }
+
+        // Specify PDF-specific headers
+        const pdfHeaders:any = {
+            'Accept': 'application/pdf',
+            'Content-Type': 'application/pdf'
+        };
+
+        const pdfData = await QuickBooksService.apiRequest(
+            'GET',
+            `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}/pdf?minorversion=65`,
+            null,
+            'arraybuffer',
+            pdfHeaders // Pass the custom headers
+        );
+
+        // Verify PDF data
+        if (!pdfData || !Buffer.isBuffer(pdfData)) {
+            throw new Error('Invalid PDF data received from QuickBooks');
+        }
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename=invoice_${invoiceId}.pdf`);
+        res.send(pdfData);
+
+    } catch (error) {
+        console.error(`PDF generation failed:`, error);
+        
+        let qboError = 'No additional details';
+        if ((error as any).response?.data) {
+            try {
+                qboError = Buffer.isBuffer((error as any).response.data)
+                    ? (error as any).response.data.toString('utf8')
+                    : JSON.stringify((error as any).response.data);
+            } catch (e) {
+                qboError = 'Unable to parse error details';
+            }
+        }
+
+        res.status(500).json({
+            message: 'Failed to generate PDF',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            qboError: qboError
+        });
     }
+}
 
     static async sendInvoice(req: Request, res: Response): Promise<void> {
         try {
@@ -309,85 +327,85 @@ export class InvoiceController {
 
 
     static async getInvoiceById(req: Request, res: Response): Promise<void> {
-    try {
-        const invoiceId = req.params.id;
+        try {
+            const invoiceId = req.params.id;
 
-        if (!invoiceId) {
-            res.status(400).json({ error: 'Invoice ID is required' });
-            return;
+            if (!invoiceId) {
+                res.status(400).json({ error: 'Invoice ID is required' });
+                return;
+            }
+
+            // Make API request to get the invoice details
+            const result = await QuickBooksService.apiRequest(
+                'GET',
+                `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}?minorversion=65`
+            );
+
+            if (!result.Invoice) {
+                res.status(404).json({ error: 'Invoice not found' });
+                return;
+            }
+
+            const invoice = result.Invoice;
+
+            // Filter out SubTotalLineDetail and other non-product lines
+            const lineItems = invoice.Line
+                .filter((item: any) => {
+                    // Only include SalesItemLineDetail with valid ItemRef
+                    return item.DetailType === 'SalesItemLineDetail' &&
+                        item.SalesItemLineDetail?.ItemRef?.value;
+                })
+                .map((item: any) => ({
+                    description: item.Description || '',
+                    amount: item.Amount,
+                    quantity: item.SalesItemLineDetail.Qty || 1,
+                    unitPrice: item.SalesItemLineDetail.UnitPrice || item.Amount,
+                    itemId: item.SalesItemLineDetail.ItemRef.value
+                }));
+
+            // Transform the response
+            const responseData = {
+                id: invoice.Id,
+                docNumber: invoice.DocNumber,
+                customer: {
+                    id: invoice.CustomerRef.value,
+                    name: invoice.CustomerRef.name
+                },
+                status: invoice.Balance === 0 ? 'PAID' : 'OPEN',
+                emailStatus: invoice.EmailStatus || 'NotSet',
+                totalAmount: invoice.TotalAmt,
+                balance: invoice.Balance,
+                date: invoice.TxnDate,
+                dueDate: invoice.DueDate,
+                lineItems, // Now contains only actual product/service line items
+                customerMemo: invoice.CustomerMemo?.value || '',
+                billingAddress: {
+                    Id: invoice.BillAddr?.Id,
+                    Line1: invoice.BillAddr?.Line1 || '',
+                    City: invoice.BillAddr?.City || '',
+                    Country: invoice.BillAddr?.Country || '',
+                    PostalCode: invoice.BillAddr?.PostalCode || ''
+                },
+                pdfUrl: `/api/invoices/${invoiceId}/pdf`
+            };
+
+            res.json(responseData);
+
+        } catch (error) {
+            console.error(`Failed to fetch invoice ${req.params.id}:`, error);
+
+            const errorResponse: any = {
+                message: 'Failed to fetch invoice details',
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+
+            if ((error as any).response?.data) {
+                errorResponse.qboError = (error as any).response.data;
+            }
+
+            res.status(500).json(errorResponse);
         }
-
-        // Make API request to get the invoice details
-        const result = await QuickBooksService.apiRequest(
-            'GET',
-            `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}?minorversion=65`
-        );
-
-        if (!result.Invoice) {
-            res.status(404).json({ error: 'Invoice not found' });
-            return;
-        }
-
-        const invoice = result.Invoice;
-
-        // Filter out SubTotalLineDetail and other non-product lines
-        const lineItems = invoice.Line
-            .filter((item: any) => {
-                // Only include SalesItemLineDetail with valid ItemRef
-                return item.DetailType === 'SalesItemLineDetail' && 
-                       item.SalesItemLineDetail?.ItemRef?.value;
-            })
-            .map((item: any) => ({
-                description: item.Description || '',
-                amount: item.Amount,
-                quantity: item.SalesItemLineDetail.Qty || 1,
-                unitPrice: item.SalesItemLineDetail.UnitPrice || item.Amount,
-                itemId: item.SalesItemLineDetail.ItemRef.value
-            }));
-
-        // Transform the response
-        const responseData = {
-            id: invoice.Id,
-            docNumber: invoice.DocNumber,
-            customer: {
-                id: invoice.CustomerRef.value,
-                name: invoice.CustomerRef.name
-            },
-            status: invoice.Balance === 0 ? 'PAID' : 'OPEN',
-            emailStatus: invoice.EmailStatus || 'NotSet',
-            totalAmount: invoice.TotalAmt,
-            balance: invoice.Balance,
-            date: invoice.TxnDate,
-            dueDate: invoice.DueDate,
-            lineItems, // Now contains only actual product/service line items
-            customerMemo: invoice.CustomerMemo?.value || '',
-            billingAddress: {
-                Id: invoice.BillAddr?.Id,
-                Line1: invoice.BillAddr?.Line1 || '',
-                City: invoice.BillAddr?.City || '',
-                Country: invoice.BillAddr?.Country || '',
-                PostalCode: invoice.BillAddr?.PostalCode || ''
-            },
-            pdfUrl: `/api/invoices/${invoiceId}/pdf`
-        };
-
-        res.json(responseData);
-
-    } catch (error) {
-        console.error(`Failed to fetch invoice ${req.params.id}:`, error);
-
-        const errorResponse: any = {
-            message: 'Failed to fetch invoice details',
-            error: error instanceof Error ? error.message : 'Unknown error'
-        };
-
-        if ((error as any).response?.data) {
-            errorResponse.qboError = (error as any).response.data;
-        }
-
-        res.status(500).json(errorResponse);
     }
-}
 
 
     static async updateInvoice(req: Request, res: Response): Promise<void> {
@@ -403,7 +421,7 @@ export class InvoiceController {
                 'GET',
                 `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}?minorversion=65`
             );
-        
+
 
             // 2. Validate required fields
             if (!req.body.CustomerRef?.value || !req.body.Line || req.body.Line.length === 0) {

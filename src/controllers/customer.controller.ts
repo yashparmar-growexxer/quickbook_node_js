@@ -2,10 +2,10 @@ import { Request, Response } from 'express';
 import { QuickBooksService } from '../services/quickbooks.service';
 
 export class CustomerController {
-  static async createCustomer(req: Request, res: Response): Promise <void> {
+  static async createCustomer(req: Request, res: Response): Promise<void> {
     try {
       if (!req.body.displayName || !req.body.email) {
-         res.status(400).json({ error: 'displayName and email are required' });
+        res.status(400).json({ error: 'displayName and email are required' });
       }
 
       const customerData = {
@@ -58,16 +58,16 @@ export class CustomerController {
     }
   }
 
- static async getMinimalCustomers(req: Request, res: Response) {
+  static async getMinimalCustomers(req: Request, res: Response) {
     try {
       // Corrected query with valid fields
       const query = `SELECT Id, DisplayName, PrimaryEmailAddr, PrimaryPhone 
         FROM Customer 
         WHERE Id >= '20' AND Id <= '30'
         MAXRESULTS 1000`;
-      
+
       const url = `/v3/company/${process.env.QB_REALM_ID}/query?query=${encodeURIComponent(query)}`;
-      
+
       const result = await QuickBooksService.apiRequest('GET', url);
 
       if (!result.QueryResponse) {
@@ -85,12 +85,13 @@ export class CustomerController {
       res.json(customers);
     } catch (error) {
       console.error('Error in getMinimalCustomers:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: (error as Error).message,
         details: (error as any).response?.data
       });
     }
   }
+  
   static async getCustomerById(req: Request, res: Response) {
     try {
       const result = await QuickBooksService.apiRequest(
@@ -105,15 +106,33 @@ export class CustomerController {
 
   static async updateCustomer(req: Request, res: Response) {
     try {
+      // First get current customer to obtain SyncToken
       const currentCustomer = await QuickBooksService.apiRequest(
         'GET',
         `/v3/company/${process.env.QB_REALM_ID}/customer/${req.params.id}`
       );
 
+      // Transform request body to QuickBooks format
       const updateData = {
-        ...req.body,
         Id: req.params.id,
         SyncToken: currentCustomer.Customer.SyncToken,
+        DisplayName: req.body.displayName,
+        GivenName: req.body.firstName || '',
+        FamilyName: req.body.lastName || '',
+        PrimaryEmailAddr: {
+          Address: req.body.email
+        },
+        PrimaryPhone: {
+          FreeFormNumber: req.body.phone
+        },
+        BillAddr: {
+          Line1: req.body.addressLine1,
+          City: req.body.city,
+          Country: req.body.country,
+          PostalCode: req.body.postalCode
+        },
+        Notes: req.body.notes || '',
+        CompanyName: req.body.companyName || '',
         sparse: true
       };
 
@@ -125,8 +144,9 @@ export class CustomerController {
 
       res.json(result.Customer);
     } catch (error) {
-      res.status(500).json({ 
-        error: (error as any).response?.data || (error as Error).message 
+      res.status(500).json({
+        error: (error as Error).message,
+        details: (error as any).response?.data
       });
     }
   }

@@ -1,30 +1,14 @@
-import { Router } from 'express';
+// In your routes file
 import { PaymentController } from '../controllers/payment.controller';
+import express from 'express';
 
-const paymentRouter = Router();
+const router = express.Router();
 
-// Create a new payment
-paymentRouter.post('/', PaymentController.createPayment);
+router.post('/', PaymentController.createPayment);
+router.get('/', PaymentController.getPayments);
+router.get('/:id', PaymentController.getPaymentById);
+router.put('/:id', PaymentController.updatePayment);
+router.delete('/:id', PaymentController.deletePayment);
+router.post('/apply', PaymentController.applyPaymentToInvoice);
 
-// Get payments with optional filters
-paymentRouter.get('/', PaymentController.getPayments);
-
-// Get detailed payment information
-paymentRouter.get('/:id', PaymentController.getPaymentDetails);
-
-// Update a payment
-paymentRouter.put('/:id', PaymentController.updatePayment);
-
-// Delete a payment
-paymentRouter.delete('/:id', PaymentController.deletePayment);
-
-// Void a payment
-paymentRouter.post('/:id/void', PaymentController.voidPayment);
-
-// Get payment as PDF
-paymentRouter.get('/:id/pdf', PaymentController.getPaymentPDF);
-
-// Send payment receipt
-paymentRouter.post('/:id/send', PaymentController.sendPaymentReceipt);
-
-export default paymentRouter;
+export default router;

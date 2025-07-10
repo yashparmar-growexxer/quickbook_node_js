@@ -408,75 +408,129 @@ export class InvoiceController {
     }
 
 
-    static async updateInvoice(req: Request, res: Response): Promise<void> {
+   static async updateInvoice(req: Request, res: Response): Promise<void> {
         try {
+            // 1. Validate invoice ID
             const invoiceId = req.params.id;
-            if (!invoiceId) {
-                res.status(400).json({ error: 'Invoice ID is required' });
+            if (!invoiceId || !/^\d+$/.test(invoiceId)) {
+                res.status(400).json({ error: 'Valid numeric Invoice ID is required' });
                 return;
             }
 
-            // 1. Get current invoice state to obtain fresh SyncToken
-            const currentInvoice = await QuickBooksService.apiRequest(
-                'GET',
-                `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}?minorversion=65`
-            );
+            // 2. Log the incoming request for debugging
+            console.log('Update invoice request:', {
+                id: invoiceId,
+                body: req.body,
+                headers: req.headers
+            });
 
+            // 3. Get current invoice state to obtain fresh SyncToken and validate existence
+            let currentInvoice;
+            try {
+                currentInvoice = await QuickBooksService.apiRequest(
+                    'GET',
+                    `/v3/company/${process.env.QB_REALM_ID}/invoice/${invoiceId}?minorversion=65`
+                );
 
-            // 2. Validate required fields
-            if (!req.body.CustomerRef?.value || !req.body.Line || req.body.Line.length === 0) {
-                res.status(400).json({ error: 'CustomerRef.value and at least one Line item are required' });
+                if (!currentInvoice || !currentInvoice.Invoice) {
+                    res.status(404).json({ error: 'Invoice not found in QuickBooks' });
+                    return;
+                }
+            } catch (error) {
+                if (error.response?.status === 404) {
+                    res.status(404).json({ error: 'Invoice not found in QuickBooks' });
+                    return;
+                }
+                throw error;
+            }
+
+            // 4. Validate request payload structure
+            if (!req.body || typeof req.body !== 'object') {
+                res.status(400).json({ error: 'Request body must be a valid JSON object' });
                 return;
             }
 
-            // 3. Transform line items to match QuickBooks format
-            const lineItems = req.body.Line.map((item: any) => {
-                if (!item.SalesItemLineDetail?.ItemRef?.value ||
-                    item.SalesItemLineDetail?.UnitPrice === undefined ||
-                    item.SalesItemLineDetail?.Qty === undefined) {
-                    throw new Error('Each line item requires ItemRef.value, UnitPrice, and Qty');
+            // 5. Validate required fields
+            if (!req.body.CustomerRef?.value) {
+                res.status(400).json({ error: 'CustomerRef.value is required' });
+                return;
+            }
+
+            if (!req.body.Line || !Array.isArray(req.body.Line) || req.body.Line.length === 0) {
+                res.status(400).json({ error: 'At least one Line item is required' });
+                return;
+            }
+
+            // 6. Transform and validate line items
+            const lineItems = req.body.Line.map((item: any, index: number) => {
+                if (!item.SalesItemLineDetail?.ItemRef?.value) {
+                    throw new Error(`Line item ${index + 1}: ItemRef.value is required`);
+                }
+
+                if (item.SalesItemLineDetail?.UnitPrice === undefined) {
+                    throw new Error(`Line item ${index + 1}: UnitPrice is required`);
+                }
+
+                if (item.SalesItemLineDetail?.Qty === undefined) {
+                    throw new Error(`Line item ${index + 1}: Qty is required`);
+                }
+
+                const unitPrice = parseFloat(item.SalesItemLineDetail.UnitPrice);
+                const qty = parseFloat(item.SalesItemLineDetail.Qty);
+
+                if (isNaN(unitPrice) || isNaN(qty)) {
+                    throw new Error(`Line item ${index + 1}: UnitPrice and Qty must be numbers`);
                 }
 
                 return {
+                    Id: item.Id || null, // Important for existing line items
+                    LineNum: item.LineNum || index + 1,
                     DetailType: 'SalesItemLineDetail',
-                    Amount: item.SalesItemLineDetail.UnitPrice * item.SalesItemLineDetail.Qty,
+                    Amount: unitPrice * qty,
                     Description: item.Description || '',
                     SalesItemLineDetail: {
                         ItemRef: {
                             value: item.SalesItemLineDetail.ItemRef.value,
                             name: item.SalesItemLineDetail.ItemRef.name || ''
                         },
-                        UnitPrice: item.SalesItemLineDetail.UnitPrice,
-                        Qty: item.SalesItemLineDetail.Qty
+                        UnitPrice: unitPrice,
+                        Qty: qty,
+                        TaxCodeRef: item.SalesItemLineDetail.TaxCodeRef || 
+                                   currentInvoice.Invoice.Line[0]?.SalesItemLineDetail?.TaxCodeRef || 
+                                   { value: 'NON' } // Default to non-taxable if not specified
                     }
                 };
             });
 
-            // 4. Prepare update payload with ALL required fields
+            // 7. Prepare update payload with all required fields
             const invoiceData = {
                 Id: invoiceId,
-                SyncToken: currentInvoice.Invoice.SyncToken, // Use fresh SyncToken
+                SyncToken: currentInvoice.Invoice.SyncToken,
                 sparse: true,
                 CustomerRef: {
                     value: req.body.CustomerRef.value,
-                    name: req.body.CustomerRef.name || ''
+                    name: req.body.CustomerRef.name || currentInvoice.Invoice.CustomerRef.name
                 },
                 TxnDate: req.body.TxnDate || currentInvoice.Invoice.TxnDate,
                 DueDate: req.body.DueDate || currentInvoice.Invoice.DueDate,
-                Line: lineItems,
                 DocNumber: req.body.DocNumber || currentInvoice.Invoice.DocNumber,
+                Line: lineItems,
                 CustomerMemo: {
-                    value: req.body.CustomerMemo || currentInvoice.Invoice.CustomerMemo?.value || ''
+                    value: req.body.CustomerMemo?.value || currentInvoice.Invoice.CustomerMemo?.value || ''
                 },
-                // Include other fields that might be required
+                // Include other fields that QuickBooks requires to be present
                 CurrencyRef: currentInvoice.Invoice.CurrencyRef,
                 BillAddr: currentInvoice.Invoice.BillAddr,
-                ShipFromAddr: currentInvoice.Invoice.ShipFromAddr
+                ShipAddr: currentInvoice.Invoice.ShipAddr,
+                SalesTermRef: currentInvoice.Invoice.SalesTermRef || null,
+                PrivateNote: req.body.PrivateNote || currentInvoice.Invoice.PrivateNote || '',
+                PrintStatus: req.body.PrintStatus || currentInvoice.Invoice.PrintStatus || 'NeedToPrint',
+                EmailStatus: req.body.EmailStatus || currentInvoice.Invoice.EmailStatus || 'NotSet'
             };
 
-            console.log('Sending update:', JSON.stringify(invoiceData, null, 2));
+            console.log('Prepared invoice update payload:', JSON.stringify(invoiceData, null, 2));
 
-            // 5. Send update request
+            // 8. Send update request to QuickBooks
             const result = await QuickBooksService.apiRequest(
                 'POST',
                 `/v3/company/${process.env.QB_REALM_ID}/invoice?minorversion=65&operation=update`,
@@ -484,40 +538,67 @@ export class InvoiceController {
                 'json'
             );
 
-            // 6. Return formatted response
+            // 9. Validate the response
+            if (!result?.Invoice?.Id) {
+                throw new Error('Invalid response from QuickBooks API');
+            }
+
+            // 10. Return success response
             res.status(200).json({
+                success: true,
                 id: result.Invoice.Id,
                 docNumber: result.Invoice.DocNumber,
                 totalAmount: result.Invoice.TotalAmt,
                 balance: result.Invoice.Balance,
-                qboId: result.Invoice.Id,
                 customer: {
                     id: result.Invoice.CustomerRef.value,
                     displayName: result.Invoice.CustomerRef.name
                 },
                 lineItems: result.Invoice.Line.map((line: any) => ({
+                    id: line.Id,
                     amount: line.Amount,
                     description: line.Description,
-                    itemId: line.SalesItemLineDetail.ItemRef.value,
-                    quantity: line.SalesItemLineDetail.Qty,
-                    unitPrice: line.SalesItemLineDetail.UnitPrice
+                    itemId: line.SalesItemLineDetail?.ItemRef?.value,
+                    quantity: line.SalesItemLineDetail?.Qty,
+                    unitPrice: line.SalesItemLineDetail?.UnitPrice
                 })),
-                syncToken: result.Invoice.SyncToken // Return new SyncToken for future updates
+                syncToken: result.Invoice.SyncToken,
+                status: result.Invoice.EmailStatus,
+                txnDate: result.Invoice.TxnDate,
+                dueDate: result.Invoice.DueDate
             });
 
         } catch (error) {
-            console.error('Update failed:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                config: error.config
+            console.error('Invoice update failed:', {
+                timestamp: new Date().toISOString(),
+                error: error.message,
+                stack: error.stack,
+                response: {
+                    status: error.response?.status,
+                    data: error.response?.data,
+                    headers: error.response?.headers
+                },
+                request: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    data: error.config?.data
+                }
             });
 
             const qboError = error.response?.data?.Fault?.Error?.[0] || {};
-            res.status(error.response?.status || 500).json({
+            const statusCode = error.response?.status || 500;
+
+            res.status(statusCode).json({
                 error: qboError.Message || 'Invoice update failed',
                 code: qboError.code,
                 detail: qboError.Detail,
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+                ...(process.env.NODE_ENV === 'development' && {
+                    debug: {
+                        message: error.message,
+                        stack: error.stack,
+                        qboErrorDetails: error.response?.data?.Fault
+                    }
+                })
             });
         }
     }
